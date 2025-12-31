@@ -294,11 +294,24 @@ class AirbnbCheckerRules:
         *,
         require_rc: bool = True,
         include_units_per_floor: bool = True,
-    ) -> None:
+        verbose: bool = True,  # [추가] 프린트 on/off 옵션
+    ) -> int:
+        """
+        리턴값 의미:
+        0: 에어비앤비 운영 불가능
+        1: 운영 가능하지만, 세대수/가구수/호수 정보 미기재
+        2: 운영 가능하며, 세대수/가구수/호수 정보 기재됨
+        """
+        
+        # 내부 헬퍼 함수: verbose가 True일 때만 출력
+        def log(*args, **kwargs):
+            if verbose:
+                print(*args, **kwargs)
+
         title_items = self.client.get_title_info(sigungu_cd, bjdong_cd, bun, ji)
         if not title_items:
-            print("❌ 표제부 조회 결과가 없습니다. 주소/지번을 확인해주세요.")
-            return
+            log("❌ 표제부 조회 결과가 없습니다. 주소/지번을 확인해주세요.")
+            return 0  # 불가능
 
         title = title_items[0]  # 여러 동이면 dongNm으로 필터 확장 가능
 
@@ -379,79 +392,78 @@ class AirbnbCheckerRules:
         house_type = self.detect_house_type(main_purps, etc_purps)
 
         # ====== 출력(사람 보기 좋은 리포트) ======
-        print("\n" + "=" * 72)
-        print("🏠 외국인관광 도시민박업(에어비앤비) 가능성 1차 자동판정 리포트")
-        print("=" * 72)
-        print(f"• 건물명: {bld_name}")
-        print(f"• 지번주소(platPlc): {plat_plc or '(없음)'}")
-        print(f"• 도로명주소(newPlatPlc): {new_plat_plc or '(없음)'}")
+        log("\n" + "=" * 72)
+        log("🏠 외국인관광 도시민박업(에어비앤비) 가능성 1차 자동판정 리포트")
+        log("=" * 72)
+        log(f"• 건물명: {bld_name}")
+        log(f"• 지번주소(platPlc): {plat_plc or '(없음)'}")
+        log(f"• 도로명주소(newPlatPlc): {new_plat_plc or '(없음)'}")
         if map_url:
-            print(f"• 지도: {map_url}")
-        print(f"• 주용도(mainPurpsCdNm): {main_purps}")
+            log(f"• 지도: {map_url}")
+        log(f"• 주용도(mainPurpsCdNm): {main_purps}")
         if etc_purps:
-            print(f"• 세부용도(etcPurps): {etc_purps}")
+            log(f"• 세부용도(etcPurps): {etc_purps}")
 
         # 1) 불법여부확인 (불법이면 즉시 종료)
-        print("\n[1] 불법여부확인")
+        log("\n[1] 불법여부확인")
         if is_viol:
-            print("⛔ 위반/위법 건축물로 표시됨(violBldYn=1) → 즉시 ‘운영 불가능’ 판정")
-            print("=" * 72 + "\n")
-            return
+            log("⛔ 위반/위법 건축물로 표시됨(violBldYn=1) → 즉시 ‘운영 불가능’ 판정")
+            log("=" * 72 + "\n")
+            return 0 # 불가능
         else:
-            print("✅ 위반/위법 건축물 아님(violBldYn=0) → 다음 단계 진행")
+            log("✅ 위반/위법 건축물 아님(violBldYn=0) → 다음 단계 진행")
 
         # 2) 연식 확인
-        print("\n[2] 연식 확인")
+        log("\n[2] 연식 확인")
         if use_apr:
-            print(f"• 사용승인일(useAprDay): {use_apr.isoformat()}")
+            log(f"• 사용승인일(useAprDay): {use_apr.isoformat()}")
         else:
-            print("• 사용승인일(useAprDay): (없음)")
+            log("• 사용승인일(useAprDay): (없음)")
         if age_years is not None:
             over_30 = age_years > 30
-            print(f"• 경과년수: 약 {age_years}년" + (" (30년 초과)" if over_30 else ""))
+            log(f"• 경과년수: 약 {age_years}년" + (" (30년 초과)" if over_30 else ""))
         else:
-            print("• 경과년수: 계산 불가(사용승인일 없음)")
+            log("• 경과년수: 계산 불가(사용승인일 없음)")
 
         # 3) 용도/주택종류/구조 + 제한 필터링
-        print("\n[3] 용도/주택종류/구조(필터링 포함)")
-        print(f"• 주택종류(추정): {house_type}")
-        print(f"• 층수: 지상 {grnd_floors if grnd_floors is not None else '?'}층 / 지하 {ugrnd_floors if ugrnd_floors is not None else '?'}층")
-        print(f"• 면적(판정용): {area_m2:.2f}㎡" if area_m2 is not None else "• 면적(판정용): (없음)")
+        log("\n[3] 용도/주택종류/구조(필터링 포함)")
+        log(f"• 주택종류(추정): {house_type}")
+        log(f"• 층수: 지상 {grnd_floors if grnd_floors is not None else '?'}층 / 지하 {ugrnd_floors if ugrnd_floors is not None else '?'}층")
+        log(f"• 면적(판정용): {area_m2:.2f}㎡" if area_m2 is not None else "• 면적(판정용): (없음)")
 
         # (a) 대상주택 필터
         allowed_house = house_type in self.ALLOWED_HOUSE_TYPES
         if allowed_house:
-            print("✅ 대상주택 범주에 해당(단독/다가구/아파트/연립/다세대)")
+            log("✅ 대상주택 범주에 해당(단독/다가구/아파트/연립/다세대)")
         else:
-            print("⛔ 대상주택 범주가 아니거나(또는 세부 미상) → 운영 불가능(구청 확인 필요)")
-            print("   ※ ‘공동주택(세부미상)’이면 다세대/아파트/연립 중 무엇인지 추가 확인 필요")
-            print("=" * 72 + "\n")
-            return
+            log("⛔ 대상주택 범주가 아니거나(또는 세부 미상) → 운영 불가능(구청 확인 필요)")
+            log("   ※ ‘공동주택(세부미상)’이면 다세대/아파트/연립 중 무엇인지 추가 확인 필요")
+            log("=" * 72 + "\n")
+            return 0 # 불가능
 
         # (b) 안내문 명시 ‘등록 불가’ 키워드(보조 필터)
         combined = (main_purps + " " + etc_purps).replace(" ", "")
         bad_hit = [k for k in self.DISALLOWED_KEYWORDS if k.replace(" ", "") in combined]
         if bad_hit:
-            print(f"⛔ 등록 불가 키워드 감지: {', '.join(bad_hit)} → 운영 불가능")
-            print("=" * 72 + "\n")
-            return
+            log(f"⛔ 등록 불가 키워드 감지: {', '.join(bad_hit)} → 운영 불가능")
+            log("=" * 72 + "\n")
+            return 0 # 불가능
         else:
-            print("✅ 등록 불가(오피스텔/원룸형/다중주택 등)로 보이는 키워드 없음")
+            log("✅ 등록 불가(오피스텔/원룸형/다중주택 등)로 보이는 키워드 없음")
 
         # (c) 등록기준(연면적 230㎡ 미만) 체크
-        # 주의: 안내문은 “주택의 연면적” 기준. 여기서는 표제부 면적(totDongTotArea/totArea)로 1차 체크.
         if area_m2 is not None:
             if area_m2 < 230:
-                print(f"✅ 등록기준(연면적 230㎡ 미만) 충족: {area_m2:.2f}㎡")
+                log(f"✅ 등록기준(연면적 230㎡ 미만) 충족: {area_m2:.2f}㎡")
             else:
-                print(f"⛔ 등록기준(연면적 230㎡ 미만) 미충족: {area_m2:.2f}㎡ → 운영 불가능")
-                print("=" * 72 + "\n")
-                return
+                log(f"⛔ 등록기준(연면적 230㎡ 미만) 미충족: {area_m2:.2f}㎡ → 운영 불가능")
+                log("=" * 72 + "\n")
+                return 0 # 불가능
         else:
-            print("⚠️ 연면적 값이 없어 230㎡ 기준 자동판정 불가(구청/등기/도면으로 확인 권장)")
+            log("⚠️ 연면적 값이 없어 230㎡ 기준 자동판정 불가(구청/등기/도면으로 확인 권장)")
 
         # (d) 주택종류별 제한(층수/면적/세대수) 필터
-        print("\n• 주택종류별 요건 체크(동작구 안내문 표 기반)")
+        log("\n• 주택종류별 요건 체크(동작구 안내문 표 기반)")
         rule_results = self.check_house_type_constraints(
             house_type,
             grnd_floors=grnd_floors,
@@ -460,53 +472,57 @@ class AirbnbCheckerRules:
         )
         for rr in rule_results:
             mark = "✅" if rr.ok else "⛔"
-            print(f"  {mark} {rr.label} | {rr.detail}")
+            log(f"  {mark} {rr.label} | {rr.detail}")
 
-        # 하나라도 “명확히 실패(False)”면 불가로 처리(단, ‘값 없음’ 때문에 실패한 경우는 경고로만 둘 수도 있음)
-        # 여기서는 안전하게: “명확히 조건 위반”이 있으면 불가
         hard_fail = [r for r in rule_results if (not r.ok and "값이 없어" not in r.detail)]
         if hard_fail:
-            print("\n⛔ 주택종류 요건 미충족 항목 존재 → 운영 불가능")
-            print("=" * 72 + "\n")
-            return
+            log("\n⛔ 주택종류 요건 미충족 항목 존재 → 운영 불가능")
+            log("=" * 72 + "\n")
+            return 0 # 불가능
 
         # (e) 구조(철근콘크리트 여부)
-        print("\n• 구조 확인")
-        print(f"  - 원문: {strct_raw or '(없음)'}")
-        print(f"  - 분류: {strct_class}")
+        log("\n• 구조 확인")
+        log(f"  - 원문: {strct_raw or '(없음)'}")
+        log(f"  - 분류: {strct_class}")
         if require_rc:
             if strct_class == "철근콘크리트(RC)":
-                print("✅ (요청 기준) 철근콘크리트 구조 → 통과")
+                log("✅ (요청 기준) 철근콘크리트 구조 → 통과")
             else:
-                print("⛔ (요청 기준) 철근콘크리트 구조 아님 → 운영 불가능 판정")
-                print("=" * 72 + "\n")
-                return
+                log("⛔ (요청 기준) 철근콘크리트 구조 아님 → 운영 불가능 판정")
+                log("=" * 72 + "\n")
+                return 0 # 불가능
 
         # 4) 세대수 확인(총/층별)
-        print("\n[4] 세대수 확인")
-        print(f"• 총 세대수(판정용): {total_units if total_units is not None else '(없음)'}")
-        print(f"  - 세대수(hhldCnt): {hhld_cnt if hhld_cnt is not None else '(없음)'}")
-        print(f"  - 가구수(fmlyCnt): {fmly_cnt if fmly_cnt is not None else '(없음)'}")
-        print(f"  - 호수(hoCnt): {ho_cnt if ho_cnt is not None else '(없음)'}")
+        log("\n[4] 세대수 확인")
+        log(f"• 총 세대수(판정용): {total_units if total_units is not None else '(없음)'}")
+        log(f"  - 세대수(hhldCnt): {hhld_cnt if hhld_cnt is not None else '(없음)'}")
+        log(f"  - 가구수(fmlyCnt): {fmly_cnt if fmly_cnt is not None else '(없음)'}")
+        log(f"  - 호수(hoCnt): {ho_cnt if ho_cnt is not None else '(없음)'}")
         if total_units_from_expos is not None:
-            print(f"  - 전유부(getBrExposInfo) 집계 호수: {total_units_from_expos}")
+            log(f"  - 전유부(getBrExposInfo) 집계 호수: {total_units_from_expos}")
 
         if units_per_floor:
-            print("\n• 층별 세대수(=전유부 호 수) 상세")
+            log("\n• 층별 세대수(=전유부 호 수) 상세")
             for row in units_per_floor:
-                print(f"  - {row['dong']} / {row['floor']}층: {row['unit_count']}세대")
+                log(f"  - {row['dong']} / {row['floor']}층: {row['unit_count']}세대")
         else:
-            print("• 층별 세대수: (전유부 조회 결과 없음)")
-
-
+            log("• 층별 세대수: (전유부 조회 결과 없음)")
 
 
         # 최종 결론
-        print("\n" + "-" * 72)
-        print("🎯 최종 판정: ✅ 운영 가능(1차 자동판정 기준 통과)")
-        print("   ※ 실제 등록은 ‘거주 요건(주민 실거주)’, 공동주택 관리규약/동의 등 추가 요건 확인 필요")
-        print("-" * 72)
-        print("=" * 72 + "\n")
+        log("\n" + "-" * 72)
+        log("🎯 최종 판정: ✅ 운영 가능(1차 자동판정 기준 통과)")
+        log("   ※ 실제 등록은 ‘거주 요건(주민 실거주)’, 공동주택 관리규약/동의 등 추가 요건 확인 필요")
+        log("-" * 72)
+        log("=" * 72 + "\n")
+
+        # 리턴 로직
+        # 2: 운영 가능 & 정보 있음
+        # 1: 운영 가능 & 정보 없음(total_units가 None)
+        if total_units is not None:
+            return 2
+        else:
+            return 1
 
 
 if __name__ == "__main__":
@@ -517,18 +533,12 @@ if __name__ == "__main__":
 
     bot = AirbnbCheckerRules(service_key)
 
-    # 예시 실행(여기 값만 바꿔서 테스트)
-    # bot.run("11590", "10400", "48", "31", include_units_per_floor=True, require_rc=True)
-# 광주광역시 서구 쌍촌동 : 29140, 11800
-# 흑석동 : 11590, 10500
-    
-    # bot.run("11590", "10400", "48", "31", include_units_per_floor=True, require_rc=False)
-    bot.run("11590", "10400", "9", "0", include_units_per_floor=True, require_rc=False)
-    bot.run("11590", "10400", "9", "0", include_units_per_floor=True, require_rc=False)
-    bot.run("11590", "10400", "9", "0", include_units_per_floor=True, require_rc=False)
-    # bot.run("11590", "10400", "49", "4", include_units_per_floor=True, require_rc=False)
-    # bot.run("11590", "101/0", "264", "5", include_units_per_floor=True, require_rc=False)
-    # bot.run("11590", "10800", "353", "14", include_units_per_floor=True, require_rc=False)
-    # bot.run("29140", "11800", "292", "00", include_units_per_floor=True, require_rc=False)
-    # bot.run("11590", "10500", "50", "67", include_units_per_floor=True, require_rc=False)
+    # 예시 1: 프린트 ON (기본값) -> 결과 출력됨
+    print("--- Test Case 1: Verbose ON ---")
+    result1 = bot.run("11590", "10400", "50", "29", include_units_per_floor=True, require_rc=False, verbose=True)
+    print(f"Result Code: {result1}")
 
+    # 예시 2: 프린트 OFF -> 결과 코드만 리턴
+    print("\n--- Test Case 2: Verbose OFF ---")
+    result2 = bot.run("11590", "10400", "50", "29", include_units_per_floor=True, require_rc=False, verbose=False)
+    print(f"Result Code: {result2}")
