@@ -30,3 +30,8 @@ build/
 # OS 파일
 .DS_Store
 Thumbs.db
+
+# data 파일
+*.csv
+*.xlsx
+*.db
