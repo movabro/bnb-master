@@ -299,8 +299,10 @@ class AirbnbCheckerRules:
         """
         리턴값 의미:
         0: 에어비앤비 운영 불가능
-        1: 운영 가능하지만, 세대수/가구수/호수 정보 미기재
-        2: 운영 가능하며, 세대수/가구수/호수 정보 기재됨
+        1: 운영 가능 & 2층 이상 & 1세대 (예: 2층 단독주택 등)
+        2: 운영 가능 & 1층(단층 or 지하1층+지상1층) & 1세대 이상
+        3: 운영 가능 & 2~4층 & 지하1층 이하 & 2세대 이상 (다가구/다세대 등)
+        4: 운영 가능 & 위 1,2,3 케이스 외 나머지
         """
         
         # 내부 헬퍼 함수: verbose가 True일 때만 출력
@@ -516,13 +518,27 @@ class AirbnbCheckerRules:
         log("-" * 72)
         log("=" * 72 + "\n")
 
-        # 리턴 로직
-        # 2: 운영 가능 & 정보 있음
-        # 1: 운영 가능 & 정보 없음(total_units가 None)
-        if total_units is not None:
-            return 2
-        else:
+        # 리턴 로직 개선 (0~4)
+        # 비교를 위해 None 값을 0으로 치환 (조건문 오류 방지)
+        gf = grnd_floors if grnd_floors is not None else 0 # 지상층수
+        uf = ugrnd_floors if ugrnd_floors is not None else 0 # 지하층수
+        tu = total_units if total_units is not None else 0 # 총 세대수
+
+        # Case 1: 운영 가능 & 2층 이상 & 1세대
+        if (gf >= 2) and ((hhld_cnt == 1) or (fmly_cnt == 1) or (ho_cnt == 1)):
             return 1
+
+        # Case 2: 운영 가능 & 1층(단층 또는 지하1층+지상1층) & 1세대 이상
+        # (지상1층이면서 지하가 1층 이하인 경우를 포함)
+        if (gf == 1) and (uf <= 1) and ((hhld_cnt >= 1) or (fmly_cnt >= 1) or (ho_cnt >= 1)):
+            return 2
+
+        # Case 3: 운영 가능 & 2~4층 & 지하1층 이하 & 2세대 이상
+        if (2 <= gf <= 4) and (uf <= 1) and ((hhld_cnt >= 2) or (fmly_cnt >= 2) or (ho_cnt >= 2)):
+            return 3
+
+        # Case 4: 위 1,2,3 케이스에 해당하지 않는 경우
+        return 4
 
 
 if __name__ == "__main__":
@@ -535,10 +551,10 @@ if __name__ == "__main__":
 
     # 예시 1: 프린트 ON (기본값) -> 결과 출력됨
     print("--- Test Case 1: Verbose ON ---")
-    result1 = bot.run("11590", "10400", "50", "29", include_units_per_floor=True, require_rc=False, verbose=True)
+    result1 = bot.run("11590", "10400", "49", "4", include_units_per_floor=True, require_rc=False, verbose=True)
     print(f"Result Code: {result1}")
 
     # 예시 2: 프린트 OFF -> 결과 코드만 리턴
     print("\n--- Test Case 2: Verbose OFF ---")
-    result2 = bot.run("11590", "10400", "50", "29", include_units_per_floor=True, require_rc=False, verbose=False)
+    result2 = bot.run("11590", "10400", "49", "4", include_units_per_floor=True, require_rc=False, verbose=False)
     print(f"Result Code: {result2}")
